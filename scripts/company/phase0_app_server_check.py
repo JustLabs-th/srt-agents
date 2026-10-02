@@ -14,6 +14,7 @@ import threading
 import time
 
 from local_codex import prepare_runtime
+from request_record import ATTACHMENT_TYPE, attachment_params, new_record
 
 
 class CheckClient:
@@ -150,7 +151,7 @@ class CheckClient:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("scenario", choices=["human", "approval", "approval-accept", "subagent", "git"])
+    parser.add_argument("scenario", choices=["human", "approval", "approval-accept", "subagent", "git", "request"])
     parser.add_argument("--cwd", type=Path, required=True)
     args = parser.parse_args()
     cwd = args.cwd.resolve(strict=True)
@@ -191,6 +192,31 @@ def main():
                 "Without tools or another question, state the calculator policy selected on "
                 "the previous turn. Do not modify anything.")
             assert any("Subtract" in e.get("item", {}).get("text", "") for e in followup)
+        elif args.scenario == "request":
+            # Model-free Phase 0B check of the company.request.v1 attachment contract.
+            record = new_record("synthetic-user-1", "MODIFY_PROJECT", "Phase 0B fixture request",
+                                project_id="fixture-project", change_type="BUGFIX")
+            added = client.call("thread/attachment/add", attachment_params(thread_id, record))
+            assert added["outcome"] == "created" and added["attachment"]["payload"] == record
+            forged = dict(record, requested_by_user_id="synthetic-user-2")
+            again = client.call("thread/attachment/add", attachment_params(thread_id, forged))
+            assert again["outcome"] == "existing"
+            assert again["attachment"]["payload"]["requested_by_user_id"] == "synthetic-user-1"
+            owner_query = {"attachmentType": ATTACHMENT_TYPE, "identityKey": record["request_id"]}
+            owners = client.call("thread/attachmentOwner/list", owner_query)["data"]
+            assert [o["threadId"] for o in owners] == [thread_id]
+            client.record({"event": "request_attached", "threadId": thread_id,
+                           "requestId": record["request_id"]})
+            client.close()
+            # Durability: a fresh app-server process must still resolve the same record.
+            client = CheckClient(cwd)
+            client.call("initialize", {"clientInfo": {"name": "phase0_check", "version": "0.1"},
+                                       "capabilities": {"experimentalApi": True}})
+            client.send({"method": "initialized", "params": {}})
+            listed = client.call("thread/attachment/list", {"threadId": thread_id})["data"]
+            assert [a["payload"] for a in listed if a["attachmentType"] == ATTACHMENT_TYPE] == [record]
+            owners = client.call("thread/attachmentOwner/list", owner_query)["data"]
+            assert [o["threadId"] for o in owners] == [thread_id]
         elif args.scenario in ("approval", "approval-accept"):
             events = client.turn(thread_id,
                 "Native approval smoke test. Call exec_command exactly once with command "

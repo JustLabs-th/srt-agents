@@ -104,3 +104,11 @@ The first flat V2 live test progressed to child creation, then both threads fail
 The patch touches `features/src/lib.rs`, `core/src/tools/spec_plan.rs`, `core/src/tools/multi_agent_tool.rs`, registration regression tests and the generated config schema. Verify plain visible schemas and registered names together, retain the existing namespaced-path regressions, and exercise a real local-model V1 parent/child round trip. Enable the flat flag only in the company local configuration.
 
 Upstream conflict risk is limited to feature registration and tool-plan construction. Disable the flag to recover existing behavior; remove the patch when upstream provides equivalent provider configuration or the local endpoint supports native namespace tools. Model fallback metadata and broader model evaluation are separate concerns.
+
+## D013 — Request Record Stored as a Native Thread Attachment
+
+**Status:** Accepted (design); native round trip pending runtime verification.
+
+Phase 0B stores the immutable request record (`company.request.v1`, keyed by `request_id`) as a native thread attachment on the request's primary thread, instead of adding a request table, service or core field. Upstream's attachment API is persisted, idempotent per identity, supports reverse lookup and is copied on fork, which covers request ownership (D006) and request-to-session linkage (D007). No core change.
+
+Consequences: mutable `status` is not stored in the record (attachments cannot be updated); durable transitions go to audit events (0E). The attachment API has no per-user authorization, so protecting the record from `remove`/forgery is a Phase 0C requirement. See `02_REQUEST_MODEL.md`.
