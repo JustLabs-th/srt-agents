@@ -1,4 +1,4 @@
-//! Applies captured Multi-Agent V2 catalog overrides and namespaces to tool specifications.
+//! Applies collaboration catalog overrides and optional namespaces to tool specifications.
 //! Parameter schemas retain harness-owned encryption annotations; execution is unchanged.
 
 use crate::session::session::Session;
@@ -50,24 +50,45 @@ pub(super) fn multi_agent_v2_handler(
     if namespace.is_none() && description_override.is_none() && parameters_override.is_none() {
         return Arc::new(handler);
     }
-    Arc::new(MultiAgentV2ToolOverrides {
+    Arc::new(MultiAgentToolOverrides {
         handler: Arc::new(handler),
         namespace: namespace.map(str::to_owned),
         description_override: description_override.map(str::to_owned),
         parameters_override,
+        flatten_namespace: false,
     })
 }
 
-struct MultiAgentV2ToolOverrides {
+pub(super) fn multi_agent_v1_handler(
+    handler: impl CoreToolRuntime + 'static,
+    flatten_namespace: bool,
+) -> Arc<dyn CoreToolRuntime> {
+    if !flatten_namespace {
+        return Arc::new(handler);
+    }
+    Arc::new(MultiAgentToolOverrides {
+        handler: Arc::new(handler),
+        namespace: None,
+        description_override: None,
+        parameters_override: None,
+        flatten_namespace: true,
+    })
+}
+
+struct MultiAgentToolOverrides {
     handler: Arc<dyn CoreToolRuntime>,
     namespace: Option<String>,
     description_override: Option<String>,
     parameters_override: Option<JsonSchema>,
+    flatten_namespace: bool,
 }
 
-impl ToolExecutor<ToolInvocation> for MultiAgentV2ToolOverrides {
+impl ToolExecutor<ToolInvocation> for MultiAgentToolOverrides {
     fn tool_name(&self) -> ToolName {
         let tool_name = self.handler.tool_name();
+        if self.flatten_namespace {
+            return ToolName::plain(tool_name.name);
+        }
         match &self.namespace {
             Some(namespace) => ToolName::namespaced(namespace.clone(), tool_name.name),
             None => tool_name,
@@ -76,6 +97,12 @@ impl ToolExecutor<ToolInvocation> for MultiAgentV2ToolOverrides {
 
     fn spec(&self) -> ToolSpec {
         let mut spec = self.handler.spec();
+        if self.flatten_namespace
+            && let ToolSpec::Namespace(namespace) = &spec
+            && let [ResponsesApiNamespaceTool::Function(tool)] = namespace.tools.as_slice()
+        {
+            spec = ToolSpec::Function(tool.clone());
+        }
         if let ToolSpec::Function(tool) = &mut spec {
             if let Some(description) = &self.description_override {
                 tool.description.clone_from(description);
@@ -116,7 +143,7 @@ impl ToolExecutor<ToolInvocation> for MultiAgentV2ToolOverrides {
     }
 }
 
-impl CoreToolRuntime for MultiAgentV2ToolOverrides {
+impl CoreToolRuntime for MultiAgentToolOverrides {
     fn wait_until_ready<'a>(&'a self, session: &'a Arc<Session>) -> Option<BoxFuture<'a, ()>> {
         self.handler.wait_until_ready(session)
     }

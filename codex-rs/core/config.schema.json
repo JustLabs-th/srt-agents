@@ -893,6 +893,9 @@
             "fast_mode": {
               "type": "boolean"
             },
+            "flat_multi_agent_tools": {
+              "type": "boolean"
+            },
             "goals": {
               "type": "boolean"
             },
@@ -6990,6 +6993,9 @@
           "type": "boolean"
         },
         "fast_mode": {
+          "type": "boolean"
+        },
+        "flat_multi_agent_tools": {
           "type": "boolean"
         },
         "goals": {
