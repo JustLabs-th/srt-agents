@@ -211,6 +211,8 @@ pub enum Feature {
     Collab,
     /// Enable task-path-based multi-agent routing.
     MultiAgentV2,
+    /// Expose collaboration tools as flat functions for compatible local providers.
+    FlatMultiAgentTools,
     /// Keep spawn model choices in append-only context instead of tool descriptions.
     ModelCatalogInContext,
     /// Inherit client-defined dynamic tools in fresh V2 subagents.
@@ -1373,6 +1375,12 @@ pub const FEATURES: &[FeatureSpec] = &[
     FeatureSpec {
         id: Feature::MultiAgentV2,
         key: "multi_agent_v2",
+        stage: Stage::Stable,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::FlatMultiAgentTools,
+        key: "flat_multi_agent_tools",
         stage: Stage::Stable,
         default_enabled: false,
     },

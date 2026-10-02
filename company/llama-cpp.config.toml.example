@@ -1,0 +1,28 @@
+# Copy to an isolated CODEX_HOME/config.toml for the Phase 0 local-model run.
+# Set LLAMA_API_KEY in the process environment; never put its value here.
+# Replace the model placeholder with the ID returned by authenticated /v1/models.
+# Verify /v1/responses and streamed tool calls before running a coding task.
+model = "REPLACE_WITH_SERVER_MODEL_ID"
+model_provider = "llama_cpp"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[model_providers.llama_cpp]
+name = "Company llama.cpp"
+base_url = "http://192.168.100.26:8080/v1"
+wire_api = "responses"
+env_key = "LLAMA_API_KEY"
+requires_openai_auth = false
+supports_websockets = false
+
+# Select a native backend explicitly for Windows workspace execution.
+[windows]
+sandbox = "unelevated"
+
+# Company fork: the current worker accepts flat tools but not Responses namespaces.
+[features]
+flat_multi_agent_tools = true
+
+[features.multi_agent_v2]
+# V2 sends agent_message items that the current worker rejects; use native V1.
+enabled = false

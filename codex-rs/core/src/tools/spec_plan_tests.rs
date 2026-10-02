@@ -3052,6 +3052,80 @@ async fn multi_agent_v2_can_use_configured_tool_namespace() {
 }
 
 #[tokio::test]
+async fn multi_agent_v2_can_expose_flat_tools_for_local_provider() {
+    let plan = probe(|turn| {
+        set_feature(turn, Feature::MultiAgentV2, /*enabled*/ true);
+        set_feature(turn, Feature::FlatMultiAgentTools, /*enabled*/ true);
+    })
+    .await;
+
+    plan.assert_visible_lacks(&[MULTI_AGENT_V2_NAMESPACE]);
+    for name in [
+        "spawn_agent",
+        "send_message",
+        "followup_task",
+        "wait_agent",
+        "interrupt_agent",
+        "list_agents",
+    ] {
+        plan.assert_visible_contains(&[name]);
+        assert!(
+            plan.registered_names
+                .contains(&ToolName::plain(name).to_string())
+        );
+        assert!(
+            !plan
+                .registered_names
+                .contains(&ToolName::namespaced(MULTI_AGENT_V2_NAMESPACE, name).to_string())
+        );
+        if matches!(name, "spawn_agent" | "send_message" | "followup_task") {
+            let ToolSpec::Function(tool) = plan.visible_spec(name) else {
+                panic!("expected flat function {name}");
+            };
+            assert_eq!(
+                tool.parameters
+                    .properties
+                    .as_ref()
+                    .and_then(|properties| properties.get("message"))
+                    .and_then(|schema| schema.encrypted),
+                Some(true)
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn multi_agent_v1_can_expose_flat_tools_for_local_provider() {
+    let plan = probe(|turn| {
+        set_feature(turn, Feature::MultiAgentV2, /*enabled*/ false);
+        set_feature(turn, Feature::Collab, /*enabled*/ true);
+        set_feature(turn, Feature::FlatMultiAgentTools, /*enabled*/ true);
+    })
+    .await;
+
+    assert!(plan.can_manage_children);
+    plan.assert_visible_lacks(&[MULTI_AGENT_V1_NAMESPACE]);
+    for name in [
+        "spawn_agent",
+        "send_input",
+        "wait_agent",
+        "resume_agent",
+        "close_agent",
+    ] {
+        plan.assert_visible_contains(&[name]);
+        assert!(
+            plan.registered_names
+                .contains(&ToolName::plain(name).to_string())
+        );
+        assert!(
+            !plan
+                .registered_names
+                .contains(&ToolName::namespaced(MULTI_AGENT_V1_NAMESPACE, name).to_string())
+        );
+    }
+}
+
+#[tokio::test]
 async fn multi_agent_v2_namespace_is_supported_by_bedrock_provider() {
     let plan = probe(|turn| {
         set_feature(turn, Feature::MultiAgentV2, /*enabled*/ true);
